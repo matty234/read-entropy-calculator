@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"sync"
 )
@@ -12,68 +13,72 @@ type FoundMers struct {
 }
 
 type MatchedMers struct {
-	sync.Mutex
+	sync.Map
 
 	Chastity float64
 
-	OffsetMers map[int][]FoundMers
+	//OffsetMers map[int][]FoundMers
 }
 
 func CreateMatchedMers(chastity float64) MatchedMers {
 	return MatchedMers{
-		Mutex:      sync.Mutex{},
-		Chastity:   chastity,
-		OffsetMers: make(map[int][]FoundMers),
+		Map:      sync.Map{},
+		Chastity: chastity,
 	}
 }
 
 func (m *MatchedMers) AddMer(offset int, mer string) {
-	m.Mutex.Lock()
 
-	offsetMers, ok := m.OffsetMers[offset]
+	offsetMers, ok := m.Map.Load(offset)
 	if !ok {
 		offsetMers = make([]FoundMers, 0)
 	}
 
-	for k, v := range offsetMers {
+	o := offsetMers.([]FoundMers)
+
+	for k, v := range o {
 		if v.Mer == mer {
 			v.Count++
-			m.OffsetMers[offset][k] = v
-			m.Mutex.Unlock()
+			o[k] = v
 			return
 		}
 	}
 
-	offsetMers = append(offsetMers, FoundMers{mer, 1})
-	m.OffsetMers[offset] = offsetMers
+	offsetMers = append(o, FoundMers{mer, 1})
+	m.Map.Store(offset, offsetMers)
 
-	m.Mutex.Unlock()
 }
 
 func (m *MatchedMers) Summarise() {
-	m.Mutex.Lock()
 
-	for i := 0; i < len(m.OffsetMers); i++ {
-		offsetMers := m.OffsetMers[i]
-		fmt.Printf("Offset %d	count: %d\n", i, len(offsetMers))
-	}
-
-	// sort the offsets
-	for i := 0; i < len(m.OffsetMers); i++ {
-		unsortedMers, ok := m.OffsetMers[i]
-		if !ok {
-			continue
+	length := 0
+	m.Map.Range(func(key, value interface{}) bool {
+		l := key.(int)
+		if l > length {
+			length = l
 		}
-		sort.Slice(unsortedMers, func(i, j int) bool {
-			return unsortedMers[i].Mer > unsortedMers[j].Mer
+		return true
+	})
+
+	for i := 0; i < length; i++ {
+		offset := i
+		me, ok := m.Map.Load(i)
+		if !ok {
+			log.Fatal("Overrun?")
+		}
+
+		mers := me.([]FoundMers)
+
+		sort.Slice(mers, func(i, j int) bool {
+			return mers[i].Count > mers[j].Count
 		})
 
-		for _, v := range unsortedMers {
-			if float64(v.Count)/float64(len(unsortedMers)) > m.Chastity {
-				fmt.Printf("%d\t%s\t%d\n", i, v.Mer, v.Count)
+		fmt.Printf("Offset %d\n", offset)
+		for _, v := range mers {
+			if float64(v.Count)/float64(length) > m.Chastity {
+				fmt.Printf("\t%s\t%d\n", v.Mer, v.Count)
 			}
 		}
 	}
 
-	m.Mutex.Unlock()
 }

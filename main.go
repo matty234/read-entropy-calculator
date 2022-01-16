@@ -11,7 +11,7 @@ import (
 func main() {
 
 	var (
-		chastity        = flag.Float64("chastity", 0.05, "Chastity filter")
+		chastity        = flag.Float64("chastity", 0.5, "Chastity filter")
 		merLen          = flag.Int("merlen", 8, "Mer length")
 		consideredBases = flag.Int("consideredbases", 100, "Number of bases to consider")
 		file            = flag.String("file", "", "File to process")
