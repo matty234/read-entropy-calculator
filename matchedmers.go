@@ -60,7 +60,7 @@ func (m *MatchedMers) Summarise() {
 		return true
 	})
 
-	for i := 0; i < length; i++ {
+	for i := 0; i < length+1; i++ {
 		offset := i
 		me, ok := m.Map.Load(i)
 		if !ok {
