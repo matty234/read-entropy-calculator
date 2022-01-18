@@ -2,83 +2,51 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"sort"
-	"sync"
+	"sync/atomic"
 )
 
-type FoundMers struct {
-	Mer   string
-	Count int
-}
+type merCount map[string]*uint64
 
 type MatchedMers struct {
-	sync.Map
+	mcs []merCount
 
 	Chastity float64
-
-	//OffsetMers map[int][]FoundMers
 }
 
-func CreateMatchedMers(chastity float64) MatchedMers {
+func CreateMatchedMers(chastity float64, total int) MatchedMers {
+	m := make([]merCount, total)
+
+	for i := 0; i < total; i++ {
+		m[i] = make(merCount)
+	}
+
 	return MatchedMers{
-		Map:      sync.Map{},
+		mcs:      m,
 		Chastity: chastity,
 	}
 }
 
 func (m *MatchedMers) AddMer(offset int, mer string) {
+	r := m.mcs[offset]
 
-	offsetMers, ok := m.Map.Load(offset)
-	if !ok {
-		offsetMers = make([]FoundMers, 0)
+	if r[mer] == nil {
+		r[mer] = new(uint64)
 	}
 
-	o := offsetMers.([]FoundMers)
-
-	for k, v := range o {
-		if v.Mer == mer {
-			v.Count++
-			o[k] = v
-			return
-		}
-	}
-
-	offsetMers = append(o, FoundMers{mer, 1})
-	m.Map.Store(offset, offsetMers)
-
+	atomic.AddUint64(r[mer], 1)
 }
 
 func (m *MatchedMers) Summarise() {
 
-	length := 0
-	m.Map.Range(func(key, value interface{}) bool {
-		l := key.(int)
-		if l > length {
-			length = l
-		}
-		return true
-	})
-
-	for i := 0; i < length+1; i++ {
+	for i := 0; i < len(m.mcs); i++ {
 		offset := i
-		me, ok := m.Map.Load(i)
-		if !ok {
-			log.Fatal("Overrun?")
-		}
 
-		mers := me.([]FoundMers)
-
-		sort.Slice(mers, func(i, j int) bool {
-			return mers[i].Count > mers[j].Count
-		})
-
-		fmt.Printf("Offset %d\n", offset)
-		for _, v := range mers {
-			if float64(v.Count)/float64(length) > m.Chastity {
-				fmt.Printf("\t%s\t%d\n", v.Mer, v.Count)
+		for k, v := range m.mcs[offset] {
+			if float64(*v)/float64(len(m.mcs)) > m.Chastity {
+				fmt.Printf("%d\t%s\t%d\n", i, k, *v)
 			}
 		}
+
 	}
 
 }

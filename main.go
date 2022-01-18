@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"sync"
 )
 
 func main() {
@@ -30,40 +29,27 @@ func main() {
 		panic(err)
 	}
 
-	matchedMers := CreateMatchedMers(*chastity)
-	staticLen := *consideredBases
-	staticK := *merLen
+	matchedMers := CreateMatchedMers(*chastity, *consideredBases)
 
 	// create a channel to read from
-	reads := make(chan string)
 
-	wg := sync.WaitGroup{}
-	// create a new MerMatch
-	for i := 0; i+staticK < staticLen; i++ {
-		wg.Add(1)
-		fmt.Printf("Creating new MerMatch for offset %d (to %d)", i, i+staticK)
-		mm := CreateMerMatch(staticK, i, &matchedMers)
-		go func() {
-			mm.FindMers(reads)
-			wg.Done()
-		}()
-	}
+	coll := CreateMerMatchCollection(*chastity, *merLen, *consideredBases, &matchedMers)
+
+	// start waiting for lines
+	coll.Start()
 
 	// read from the file and send to the channel
 	scanner := bufio.NewScanner(f)
 	scanner.Split(bufio.ScanLines)
 	for scanner.Scan() {
-		txt := scanner.Text()
-
-		reads <- txt
-
+		coll.Broadcast(scanner.Text())
 	}
 
 	// close the channel
-	close(reads)
+	coll.Done()
 
 	// wait for the goroutines to finish
-	wg.Wait()
+	coll.Wait()
 
 	// summarise the results
 	matchedMers.Summarise()
